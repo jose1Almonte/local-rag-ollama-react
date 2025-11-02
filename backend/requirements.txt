@@ -1,0 +1,12 @@
+fastapi
+uvicorn[standard]
+httpx
+python-multipart
+pydantic
+PyPDF2
+python-docx
+numpy
+aiofiles
+chromadb
+langchain
+tqdm
