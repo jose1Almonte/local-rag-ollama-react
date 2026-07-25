@@ -62,6 +62,7 @@ El historial de chat es el siguiente:
 {chat_history}
 
 Responde de manera concisa y precisa. Si no sabes la respuesta, di que no lo sabes. Responde solo con la respuesta para el usuario.
+
 """)
 # creating the retriever tool
 @tool
