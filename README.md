@@ -68,12 +68,6 @@ source venv/bin/activate  # Linux/Mac
 pip install -r requirements.txt
 ```
 
-**Nota:** El `requirements.txt` está incompleto. Si faltan paquetes, instalar manualmente:
-
-```bash
-pip install langchain-ollama langchain-chroma langchain-text-splitters langchain-core python-dotenv
-```
-
 ### 3. Frontend
 
 ```bash
