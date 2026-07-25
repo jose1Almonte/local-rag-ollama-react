@@ -139,7 +139,11 @@ async def check_indexed(doc_id: str):
 @app.delete("/documents/{doc_id}")
 async def delete_document(doc_id: str):
     deleted = await STORE.adelete(doc_id)
-    os.remove(DOCS_DIR / doc_id)
+    # Find file by doc_id stem (UUID without extension)
+    for p in DOCS_DIR.iterdir():
+        if p.stem == doc_id:
+            os.remove(p)
+            break
     return {"status": "ok", "deleted_chunks": deleted}
 
 @app.post("/query")
