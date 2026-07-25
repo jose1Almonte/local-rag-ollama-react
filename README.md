@@ -89,7 +89,7 @@ ollama serve
 
 ```bash
 cd backend
-uvicorn main:app --reload --host 0.0.0.0 --port 8000
+python -m uvicorn main:app --reload --host 0.0.0.0 --port 8000
 ```
 
 El backend estará disponible en: `http://localhost:8000`
