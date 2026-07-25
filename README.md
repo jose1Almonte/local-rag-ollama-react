@@ -50,7 +50,7 @@ En lugar de depender de servicios en la nube (OpenAI, etc.), usa:
 ### 1. Clonar el repositorio
 
 ```bash
-git clone https://github.com/josey/local-rag-ollama-react.git
+git clone https://github.com/jose1Almonte/local-rag-ollama-react.git
 cd local-rag-ollama-react
 ```
 
