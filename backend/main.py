@@ -30,18 +30,18 @@ app.add_middleware(CORSMiddleware, allow_origins=["*"], allow_methods=["*"], all
 DOCS_DIR = Path(DATA_DIR) / "uploads"
 DOCS_DIR.mkdir(parents=True, exist_ok=True)
 
-# llm  = init_chat_model(
-#     os.getenv("LLM_MODEL", "llama3.1:8b"),
-#     model_provider="ollama",
-#     temperature=0.0,
-# )
-llm = init_chat_model(
-    model = 'gpt-4o-mini',
-    model_provider="azure_openai",
+llm  = init_chat_model(
+    os.getenv("LLM_MODEL", "llama3.2:latest"),
+    model_provider="ollama",
     temperature=0.0,
-    api_version="2024-12-01-preview",
-    api_key=os.getenv("AZURE_API_KEY"),
 )
+# llm = init_chat_model(
+#     model = 'gpt-4o-mini',
+#     model_provider="azure_openai",
+#     temperature=0.0,
+#     api_version="2024-12-01-preview",
+#     api_key=os.getenv("AZURE_API_KEY"),
+# )
 ollama_emb = OllamaEmbeddings(
     model=os.getenv("EMBED_MODEL", "mxbai-embed-large"),
 )
