@@ -1,1 +1,11 @@
 *.env
+
+# Documentos subidos (datos de usuario)
+backend/data/uploads/
+
+# ChromaDB (base de datos local)
+backend/chroma_db/
+
+# Python cache
+__pycache__/
+*.pyc
