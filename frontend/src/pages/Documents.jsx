@@ -1,18 +1,38 @@
 import React, { useEffect, useState } from "react";
-import { uploadDocument, listDocuments, indexDocument, deleteDocument } from "../api";
+import { uploadDocument, listDocuments, indexDocument, deleteDocument, checkIndexed } from "../api";
 import { FaFilePdf, FaFileWord, FaFileExcel, FaFileAlt, FaFile, FaTrash } from 'react-icons/fa';
 
 export default function Documents(){
   const [file, setFile] = useState(null);
   const [docs, setDocs] = useState([]);
   const [loading, setLoading] = useState(false);
+  const [indexedStatus, setIndexedStatus] = useState({});
 
   useEffect(()=> { refresh(); }, []);
 
   const refresh = async () => {
     try {
       const r = await listDocuments();
-      setDocs(r.data || []);
+      const docsList = r.data || [];
+      setDocs(docsList);
+      
+      // Check indexed status for each document
+      const statusPromises = docsList.map(async (d) => {
+        const doc_id = d.filename.split('.')[0];
+        try {
+          const res = await checkIndexed(doc_id);
+          return { doc_id, indexed: res.data.indexed, chunks: res.data.chunks };
+        } catch {
+          return { doc_id, indexed: false, chunks: 0 };
+        }
+      });
+      
+      const statuses = await Promise.all(statusPromises);
+      const statusMap = {};
+      statuses.forEach(s => {
+        statusMap[s.doc_id] = { indexed: s.indexed, chunks: s.chunks };
+      });
+      setIndexedStatus(statusMap);
     } catch(e) {
       console.error(e);
     }
@@ -37,11 +57,13 @@ export default function Documents(){
     }
   };
 
-  const handleIndex = async (doc_id) => {
+  const handleIndex = async (filename) => {
     setLoading(true);
     try {
-      await indexDocument(doc_id, 'name');
-      alert("Indexado");
+      const doc_id = filename.split('.')[0];
+      const isIndexed = indexedStatus[doc_id]?.indexed;
+      await indexDocument(doc_id, filename);
+      alert(isIndexed ? "Re-indexado" : "Indexado");
       refresh();
     } catch (e) {
       console.error(e);
@@ -51,8 +73,9 @@ export default function Documents(){
     }
   };
 
-  const handleDelete = async (doc_id) => {
+  const handleDelete = async (filename) => {
     if(!confirm("Eliminar documento?")) return;
+    const doc_id = filename.split('.')[0];
     await deleteDocument(doc_id);
     refresh();
   }
@@ -86,7 +109,7 @@ export default function Documents(){
       <div>
         <article className="w-full flex justify-between mb-4 ">
           <h3 className="font-light text-2xl">Documentos</h3>
-          <button onClick={handleUpload} disabled={loading || !file} className="bg-blue-200 text-blue-900 hover:border border-blue-900 transition transform px-6 py-2 rounded-xl disabled:bg-gray-400 disabled:cursor-not-allowed">
+          <button onClick={handleUpload} disabled={loading || !file} className="bg-blue-200 text-blue-900 hover:border border-blue-900 transition transform px-6 py-2 rounded-xl disabled:bg-gray-400 disabled:cursor-not-allowed cursor-pointer">
             Subir e indexar
           </button>
         </article>
@@ -124,16 +147,33 @@ export default function Documents(){
         {docs.map(d => {
             const { icon, color } = getFileIcon(d.filename);
             const filetype = getFileType(d.filename);
+            const doc_id = d.filename.split('.')[0];
+            const isIndexed = indexedStatus[doc_id]?.indexed;
+            const chunks = indexedStatus[doc_id]?.chunks || 0;
             return (
               <article className="w-full  grid grid-cols-4 gap-4 items-center hover:bg-gray-100 p-4 rounded-lg" key={d.doc_id}>
                 <div className={`text-3xl mb-2 ${color}`}>{icon}</div>
-                <span className={`font-medium text-sm`}>{d.filename || d.doc_id}</span>
+                <div className="flex flex-col">
+                  <span className={`font-medium text-sm`}>{d.filename || d.doc_id}</span>
+                  {isIndexed && (
+                    <span className="text-xs text-green-600 mt-1">Indexado ({chunks} chunks)</span>
+                  )}
+                </div>
                 <div className="bg-gray-100 rounded-2xl text-xs border text-gray-800 border-gray-400 w-fit px-4 py-1">
                   {filetype.toUpperCase()}
                 </div>
                 <div className="flex gap-2 justify-center">
-                  <button onClick={()=> handleIndex(d.filename)} className="text-xs bg-gray-200 hover:bg-gray-300 px-3 py-1 rounded">Indexar</button>
-                  <button onClick={()=> handleDelete(d.filename)} className="text-xs bg-red-100 hover:bg-red-200 text-red-600 px-3 py-1 rounded">
+                  <button 
+                    onClick={()=> handleIndex(d.filename)} 
+                    className={`text-xs px-3 py-1 rounded cursor-pointer ${
+                      isIndexed 
+                        ? 'bg-yellow-100 hover:bg-yellow-200 text-yellow-800' 
+                        : 'bg-gray-200 hover:bg-gray-300'
+                    }`}
+                  >
+                    {isIndexed ? 'Re-indexar' : 'Indexar'}
+                  </button>
+                  <button onClick={()=> handleDelete(d.filename)} className="text-xs bg-red-100 hover:bg-red-200 text-red-600 px-3 py-1 rounded cursor-pointer">
                     <FaTrash className="inline"/>
                   </button>
                 </div>

@@ -14,4 +14,5 @@ export const indexDocument = (doc_id, filename) => api.post(`/index/${doc_id}`, 
 export const listDocuments = () => api.get("/documents");
 export const deleteDocument = (doc_id) => api.delete(`/documents/${doc_id}`);
 export const queryChat = (query) => api.post("/query", { query });
+export const checkIndexed = (doc_id) => api.get(`/documents/${doc_id}/indexed`);
 export default api;

@@ -105,6 +105,15 @@ async def index_document(doc_id: str, filename: str | None = Form(None)):
             break
     if not found:
         raise HTTPException(status_code=404, detail="Document not found")
+    
+    # Delete existing chunks if document is already indexed (re-indexing)
+    try:
+        existing = STORE.get(where={"doc_id": doc_id})
+        if existing.get("ids"):
+            STORE.delete(ids=existing["ids"])
+    except:
+        pass
+    
     contents = found.read_bytes()
     text = node_extract(contents, found.name)
     chunks = node_split(text)
@@ -118,6 +127,14 @@ def list_documents():
     for doc_id in docs_map:
         out.append({"filename": doc_id, 'type': Path(doc_id).suffix})
     return out
+
+@app.get("/documents/{doc_id}/indexed")
+async def check_indexed(doc_id: str):
+    try:
+        results = STORE.get(where={"doc_id": doc_id})
+        return {"indexed": len(results.get("ids", [])) > 0, "chunks": len(results.get("ids", []))}
+    except:
+        return {"indexed": False, "chunks": 0}
 
 @app.delete("/documents/{doc_id}")
 async def delete_document(doc_id: str):
