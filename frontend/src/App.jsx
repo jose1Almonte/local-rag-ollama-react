@@ -16,7 +16,7 @@ export default function App() {
       </header> */}
 
       <main className="w-full mx-aut flex">
-        <Lateralbar setPage={setPage} />
+        <Lateralbar setPage={setPage} currentPage={page} />
         {page === "docs" ? <Documents /> : <Chat />}
       </main>
     </div>
