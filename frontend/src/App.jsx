@@ -5,6 +5,10 @@ import Lateralbar from "./Lateralbar";
 
 export default function App() {
   const [page, setPage] = useState("docs");
+  const [messages, setMessages] = useState([]);
+
+  const clearMessages = () => setMessages([]);
+
   return (
     <div className="min-h-screen bg-gray-50 font-sans">
       {/* <header className="max-w-5xl mx-auto flex justify-between items-center mb-6">
@@ -17,7 +21,7 @@ export default function App() {
 
       <main className="w-full mx-aut flex">
         <Lateralbar setPage={setPage} currentPage={page} />
-        {page === "docs" ? <Documents /> : <Chat />}
+        {page === "docs" ? <Documents /> : <Chat messages={messages} setMessages={setMessages} clearMessages={clearMessages} />}
       </main>
     </div>
   );

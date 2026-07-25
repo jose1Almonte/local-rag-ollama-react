@@ -1,11 +1,9 @@
 import React, { useState } from "react";
 import { queryChat } from "../api";
-import axios from "axios";
-import { FaArrowRight } from "react-icons/fa";
+import { FaArrowRight, FaTrash } from "react-icons/fa";
 
-export default function Chat(){
+export default function Chat({ messages, setMessages, clearMessages }){
   const [query, setQuery] = useState("");
-  const [messages, setMessages] = useState([]);
 
   const suggestedQuestions = [
     "¿Qué información contienen los documentos?",
@@ -35,8 +33,18 @@ export default function Chat(){
 
   return (
     <div className="bg-gray-100 rounded-lg w-full h-[600px] flex flex-col p-8 min-h-screen border border-gray-300">
-      <div className="p-4 rounded-t-lg bg-gray-100">
+      <div className="p-4 rounded-t-lg bg-gray-100 flex justify-between items-center">
         <h2 className="text-3xl font-regular text-gray-800">Chat con documentos</h2>
+        {messages.length > 0 && (
+          <button 
+            onClick={clearMessages}
+            className="flex items-center gap-2 text-sm text-gray-500 hover:text-red-600 transition-colors cursor-pointer"
+            title="Limpiar conversación"
+          >
+            <FaTrash />
+            <span>Limpiar</span>
+          </button>
+        )}
       </div>
 
       <div className="flex-1 overflow-y-auto p-4 space-y-4 bg-gray-100">

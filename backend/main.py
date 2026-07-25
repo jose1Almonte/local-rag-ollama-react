@@ -54,7 +54,7 @@ STORE = Chroma(
 # Basic prompt
 prompt = ChatPromptTemplate.from_template("""                                
 Eres un asistente de inteligencia artificial que ayuda a los usuarios a encontrar información en una colección de documentos.
-Si la intencion del usuario no requiere información de los documentos, responde sin buscar en la base de datos.
+Si no puedes responder la pregunta del usuario sin usar la información de la base de datos, limitate a indicar que careces de esa información a la base de datos.
 La consulta es la siguiente:                    
 {input}
 
