@@ -10,7 +10,7 @@ Local RAG (Retrieval-Augmented Generation) app: FastAPI backend + React/Vite fro
 
 - Ollama running locally with models pulled:
   ```bash
-  ollama pull llama3.2:latest
+  ollama pull llama3.1:8b
   ollama pull mxbai-embed-large
   ```
 
@@ -40,13 +40,13 @@ backend/
 │   ├── settings.py          # Env vars and config constants
 │   ├── extractor.py         # PDF/DOCX/TXT text extraction
 │   └── langgraph_nodes.py   # RAG pipeline: extract → split → index → retrieve
-└── data/uploads/            # Uploaded documents (UUID-named)
+└── data/uploads/            # Uploaded documents (UUID-named) + filenames.json
 
 frontend/
 ├── src/
 │   ├── api.js               # Axios client → backend API
-│   ├── App.jsx              # Page routing (useState, no router)
-│   ├── Lateralbar.jsx       # Sidebar navigation
+│   ├── App.jsx              # Page routing (useState, no router), messages state
+│   ├── Lateralbar.jsx       # Sidebar navigation with active state
 │   └── pages/
 │       ├── Documents.jsx    # Upload, list, delete, re-index docs
 │       └── Chat.jsx         # Chat interface with RAG agent
@@ -57,13 +57,14 @@ frontend/
 ### Backend
 
 - **Entry point**: `backend/main.py`
-- **LLM**: Ollama via `langchain_ollama`, default `llama3.2:latest` (env: `LLM_MODEL`)
+- **LLM**: Ollama via `langchain_ollama`, default `llama3.1:8b` (env: `LLM_MODEL`)
 - **Embeddings**: `mxbai-embed-large` (env: `EMBED_MODEL`)
 - **Vector store**: ChromaDB persisted to `backend/chroma_db/`
-- **Agent**: LangChain agent with a single `retrieve` tool (similarity search, k=3)
+- **Agent**: LangChain agent with a single `retrieve` tool (similarity search, k=6)
 - **API base**: `http://localhost:8000`
 - **CORS**: Allows all origins (dev mode)
 - **Chat history**: In-memory `CHAT_HISTORY` list, persisted during server runtime
+- **Filename mapping**: `data/uploads/filenames.json` maps UUID → original filename
 
 ### Frontend
 
@@ -78,7 +79,7 @@ frontend/
 
 | Var | Default | Where |
 |-----|---------|-------|
-| `LLM_MODEL` | `llama3.2:latest` | `main.py` (note: `settings.py` says `llama3.2:1b`) |
+| `LLM_MODEL` | `llama3.1:8b` | `settings.py` (used in `main.py` via constant) |
 | `EMBED_MODEL` | `mxbai-embed-large` | both |
 | `OLLAMA_URL` | `http://localhost:11434` | `settings.py` |
 | `DATA_DIR` | `./data` | `settings.py` |
@@ -86,18 +87,19 @@ frontend/
 
 ### API Endpoints
 
-- `POST /upload` — Upload file, returns `doc_id`
+- `POST /upload` — Upload file, returns `doc_id` and saves original filename mapping
 - `POST /index/{doc_id}` — Extract text, split, index into ChromaDB (supports re-indexing)
-- `GET /documents` — List all uploaded files
+- `GET /documents` — List all uploaded files with original filenames
 - `GET /documents/{doc_id}/indexed` — Check if document is indexed, returns chunk count
-- `DELETE /documents/{doc_id}` — Delete from ChromaDB + disk
+- `DELETE /documents/{doc_id}` — Delete from ChromaDB, disk, and filename mapping
 - `POST /query` — Send question, agent retrieves context and answers
 
 ### Gotchas
 
 - `node_retrieve()` in `langgraph_nodes.py` exists but is unused — the agent tool does its own retrieval
 - No `__init__.py` in `backend/src/` — works but unconventional
-- `settings.py` and `main.py` have different LLM_MODEL defaults — env var overrides both
+- `settings.py` and `main.py` use consistent defaults — `main.py` imports `LLM_MODEL` from `settings.py`
 - `requirements.txt` is complete — all langchain packages included
 - Chat history is in-memory only — resets when server restarts
 - Document delete uses stem matching — finds file by UUID without extension
+- `filenames.json` stores UUID → original filename mapping — must be kept in sync with uploads

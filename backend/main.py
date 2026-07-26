@@ -1,5 +1,6 @@
 import os
 import uuid
+import json
 from fastapi import FastAPI, UploadFile, File, Form, HTTPException, BackgroundTasks
 from fastapi.responses import JSONResponse
 from fastapi.middleware.cors import CORSMiddleware
@@ -11,7 +12,7 @@ from src.langgraph_nodes import (
     node_retrieve,
     STORE,
 )
-from src.settings import DATA_DIR, TOP_K
+from src.settings import DATA_DIR, TOP_K, LLM_MODEL
 from langchain_ollama import OllamaEmbeddings
 from langchain_core.prompts import PromptTemplate
 from langchain.chat_models import init_chat_model
@@ -40,8 +41,21 @@ app.add_middleware(
 DOCS_DIR = Path(DATA_DIR) / "uploads"
 DOCS_DIR.mkdir(parents=True, exist_ok=True)
 
+# Filename mapping file
+NAMES_FILE = DOCS_DIR / "filenames.json"
+
+def load_names() -> dict:
+    if NAMES_FILE.exists():
+        with open(NAMES_FILE, "r", encoding="utf-8") as f:
+            return json.load(f)
+    return {}
+
+def save_names(names: dict):
+    with open(NAMES_FILE, "w", encoding="utf-8") as f:
+        json.dump(names, f, ensure_ascii=False)
+
 llm = init_chat_model(
-    os.getenv("LLM_MODEL", "llama3.2:latest"),
+    LLM_MODEL,
     model_provider="ollama",
     temperature=0.0,
 )
@@ -64,15 +78,26 @@ STORE = Chroma(
 # Basic prompt
 prompt = ChatPromptTemplate.from_template("""                                
 Eres un asistente de inteligencia artificial que ayuda a los usuarios a encontrar información en una colección de documentos.
-Si no puedes responder la pregunta del usuario sin usar la información de la base de datos, limitate a indicar que careces de esa información a la base de datos.
+
+REGLAS ESTRICTAS:
+1. Responde SOLO con información que encuentres EXPLÍCITAMENTE en el contexto proporcionado.
+2. SIEMPRE cita el número exacto del capítulo, cláusula o sección del documento de donde extraes la información.
+3. NUNCA inventes, supongas o agregues información que no esté en los documentos.
+4. Si la información solicitada NO se encuentra en los documentos, responde EXACTAMENTE: "No tengo información sobre eso en los documentos disponibles."
+5. Si mencionas una cláusula o capítulo, debe aparecer textbatim (copiado textualmente) del documento.
+6. No mezcles información de diferentes cláusulas o capítulos.
+7. Identifica claramente el nombre de la norma o documento de referencia.
+
 La consulta es la siguiente:                    
 {input}
 
 El historial de chat es el siguiente:
 {chat_history}
 
-Responde de manera concisa y precisa. Si no sabes la respuesta, di que no lo sabes. Responde solo con la respuesta para el usuario.
-Es obligatorio que en tu respuesta identifiques e incluyas explícitamente los números de los capítulos, cláusulas y requisitos específicos extraídos de los documentos que fundamentan tu respuesta.
+CONTEXTO DE LOS DOCUMENTOS:
+Usa ÚNICAMENTE la información del contexto para responder. Si el contexto no contiene la respuesta, di que no la tienes.
+
+Responde de manera concisa, precisa y con referencia exacta al documento fuente.
 """)
 
 
@@ -80,7 +105,7 @@ Es obligatorio que en tu respuesta identifiques e incluyas explícitamente los n
 @tool
 def retrieve(query: str):
     """Retrieve information related to a query. Only when the users intent requires information from the documents."""
-    retrieved_docs = STORE.similarity_search(query, k=3)
+    retrieved_docs = STORE.similarity_search(query, k=6)
 
     serialized = ""
 
@@ -107,6 +132,12 @@ async def upload(file: UploadFile = File(...), title: str | None = Form(None)):
     save_path = DOCS_DIR / f"{doc_id}{ext}"
     with open(save_path, "wb") as f:
         f.write(contents)
+    
+    # Save original filename mapping
+    names = load_names()
+    names[doc_id] = file.filename
+    save_names(names)
+    
     return {"status": "ok", "doc_id": doc_id, "filename": file.filename}
 
 
@@ -140,10 +171,13 @@ async def index_document(doc_id: str, filename: str | None = Form(None)):
 
 @app.get("/documents")
 def list_documents():
-    docs_map = os.listdir("data/uploads")
+    names = load_names()
+    docs_map = [f for f in os.listdir("data/uploads") if f != "filenames.json"]
     out = []
     for doc_id in docs_map:
-        out.append({"filename": doc_id, "type": Path(doc_id).suffix})
+        stem = Path(doc_id).stem
+        original_name = names.get(stem, doc_id)
+        out.append({"doc_id": stem, "filename": original_name, "type": Path(doc_id).suffix})
     return out
 
 
@@ -167,6 +201,13 @@ async def delete_document(doc_id: str):
         if p.stem == doc_id:
             os.remove(p)
             break
+    
+    # Remove filename mapping
+    names = load_names()
+    if doc_id in names:
+        del names[doc_id]
+        save_names(names)
+    
     return {"status": "ok", "deleted_chunks": deleted}
 
 

@@ -18,12 +18,11 @@ export default function Documents(){
       
       // Check indexed status for each document
       const statusPromises = docsList.map(async (d) => {
-        const doc_id = d.filename.split('.')[0];
         try {
-          const res = await checkIndexed(doc_id);
-          return { doc_id, indexed: res.data.indexed, chunks: res.data.chunks };
+          const res = await checkIndexed(d.doc_id);
+          return { doc_id: d.doc_id, indexed: res.data.indexed, chunks: res.data.chunks };
         } catch {
-          return { doc_id, indexed: false, chunks: 0 };
+          return { doc_id: d.doc_id, indexed: false, chunks: 0 };
         }
       });
       
@@ -57,12 +56,11 @@ export default function Documents(){
     }
   };
 
-  const handleIndex = async (filename) => {
+  const handleIndex = async (doc_id) => {
     setLoading(true);
     try {
-      const doc_id = filename.split('.')[0];
       const isIndexed = indexedStatus[doc_id]?.indexed;
-      await indexDocument(doc_id, filename);
+      await indexDocument(doc_id, doc_id);
       alert(isIndexed ? "Re-indexado" : "Indexado");
       refresh();
     } catch (e) {
@@ -73,9 +71,8 @@ export default function Documents(){
     }
   };
 
-  const handleDelete = async (filename) => {
+  const handleDelete = async (doc_id) => {
     if(!confirm("Eliminar documento?")) return;
-    const doc_id = filename.split('.')[0];
     await deleteDocument(doc_id);
     refresh();
   }
@@ -147,14 +144,14 @@ export default function Documents(){
         {docs.map(d => {
             const { icon, color } = getFileIcon(d.filename);
             const filetype = getFileType(d.filename);
-            const doc_id = d.filename.split('.')[0];
+            const doc_id = d.doc_id;
             const isIndexed = indexedStatus[doc_id]?.indexed;
             const chunks = indexedStatus[doc_id]?.chunks || 0;
             return (
               <article className="w-full  grid grid-cols-4 gap-4 items-center hover:bg-gray-100 p-4 rounded-lg" key={d.doc_id}>
                 <div className={`text-3xl mb-2 ${color}`}>{icon}</div>
                 <div className="flex flex-col">
-                  <span className={`font-medium text-sm`}>{d.filename || d.doc_id}</span>
+                  <span className={`font-medium text-sm`}>{d.filename}</span>
                   {isIndexed && (
                     <span className="text-xs text-green-600 mt-1">Indexado ({chunks} chunks)</span>
                   )}
@@ -164,7 +161,7 @@ export default function Documents(){
                 </div>
                 <div className="flex gap-2 justify-center">
                   <button 
-                    onClick={()=> handleIndex(d.filename)} 
+                    onClick={()=> handleIndex(d.doc_id)} 
                     className={`text-xs px-3 py-1 rounded cursor-pointer ${
                       isIndexed 
                         ? 'bg-yellow-100 hover:bg-yellow-200 text-yellow-800' 
@@ -173,7 +170,7 @@ export default function Documents(){
                   >
                     {isIndexed ? 'Re-indexar' : 'Indexar'}
                   </button>
-                  <button onClick={()=> handleDelete(d.filename)} className="text-xs bg-red-100 hover:bg-red-200 text-red-600 px-3 py-1 rounded cursor-pointer">
+                  <button onClick={()=> handleDelete(d.doc_id)} className="text-xs bg-red-100 hover:bg-red-200 text-red-600 px-3 py-1 rounded cursor-pointer">
                     <FaTrash className="inline"/>
                   </button>
                 </div>

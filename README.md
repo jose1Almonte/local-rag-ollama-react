@@ -36,10 +36,10 @@ En lugar de depender de servicios en la nube (OpenAI, etc.), usa:
 
 2. **Modelos de Ollama** descargados:
 
-   ```bash
-   ollama pull llama3.2:latest
-   ollama pull mxbai-embed-large
-   ```
+```bash
+ollama pull llama3.2:latest
+ollama pull mxbai-embed-large
+```
 
 3. **Python 3.10+**
 
@@ -250,7 +250,7 @@ curl -X POST http://localhost:8000/query \
 
 ### IA (via Ollama)
 
-- **llama3.2:latest** — Modelo de chat
+- **llama3.1:8b** — Modelo de chat
 - **mxbai-embed-large** — Modelo de embeddings
 
 ## Notas y Limitaciones
