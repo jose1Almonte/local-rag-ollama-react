@@ -9,7 +9,7 @@ OLLAMA_URL = os.getenv("OLLAMA_URL", "http://localhost:11434")
 EMBED_MODEL = os.getenv("EMBED_MODEL", "mxbai-embed-large")
 LLM_MODEL = os.getenv("LLM_MODEL", "llama3.1:8b")
 
-CHUNK_SIZE = int(os.getenv("CHUNK_SIZE", 1500))
+CHUNK_SIZE = int(os.getenv("CHUNK_SIZE", 1000))
 CHUNK_OVERLAP = int(os.getenv("CHUNK_OVERLAP", 100))
 TOP_K = int(os.getenv("TOP_K", 6))
 

@@ -60,7 +60,9 @@ frontend/
 - **LLM**: Ollama via `langchain_ollama`, default `llama3.1:8b` (env: `LLM_MODEL`)
 - **Embeddings**: `mxbai-embed-large` (env: `EMBED_MODEL`)
 - **Vector store**: ChromaDB persisted to `backend/chroma_db/`
-- **Agent**: LangChain agent with a single `retrieve` tool (similarity search, k=6)
+- **Agent**: Direct LLM call (no agent framework) with pre-retrieved context grouped by document
+- **Prompt**: Simple, direct prompt for ISO expert role with context + question format
+- **Source attribution**: Chunks include `source_filename` metadata (original filename from `filenames.json`); context is grouped by document with `=== DOCUMENTO: filename ===` headers so the LLM knows which document each chunk comes from
 - **API base**: `http://localhost:8000`
 - **CORS**: Allows all origins (dev mode)
 - **Chat history**: In-memory `CHAT_HISTORY` list, persisted during server runtime

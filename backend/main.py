@@ -24,6 +24,7 @@ from langchain_core.tools import tool
 from langchain_core.messages import AIMessage, HumanMessage
 from pydantic import BaseModel
 
+# Nuestros auditores internos acaban de detectar que el departamento de producción está utilizando planos de fabricación de una versión del año pasado porque nadie les notificó que los diseños habían cambiado. Además, no existe ningún registro que demuestre quién aprobó la última versión de esos planos. Técnicamente, ¿qué requisitos específicos de nuestro sistema de gestión estamos incumpliendo según la norma? Dime el nombre de la norma ISO tambien
 
 class QueryRequest(BaseModel):
     query: str
@@ -76,43 +77,64 @@ STORE = Chroma(
 )
 
 # Basic prompt
-prompt = ChatPromptTemplate.from_template("""                                
-Eres un asistente de inteligencia artificial que ayuda a los usuarios a encontrar información en una colección de documentos.
+prompt = ChatPromptTemplate.from_template("""Eres un experto en normas ISO. Responde SOLO usando el contexto proporcionado.
 
-REGLAS ESTRICTAS:
-1. Responde SOLO con información que encuentres EXPLÍCITAMENTE en el contexto proporcionado.
-2. SIEMPRE cita el número exacto del capítulo, cláusula o sección del documento de donde extraes la información.
-3. NUNCA inventes, supongas o agregues información que no esté en los documentos.
-4. Si la información solicitada NO se encuentra en los documentos, responde EXACTAMENTE: "No tengo información sobre eso en los documentos disponibles."
-5. Si mencionas una cláusula o capítulo, debe aparecer textbatim (copiado textualmente) del documento.
-6. No mezcles información de diferentes cláusulas o capítulos.
-7. Identifica claramente el nombre de la norma o documento de referencia.
+Si el contexto no contiene la respuesta, di: "No tengo información en los documentos."
 
-La consulta es la siguiente:                    
-{input}
+CONTEXTO:
+{context}
 
-El historial de chat es el siguiente:
-{chat_history}
+PREGUNTA: {input}
 
-CONTEXTO DE LOS DOCUMENTOS:
-Usa ÚNICAMENTE la información del contexto para responder. Si el contexto no contiene la respuesta, di que no la tienes.
+RESPUESTA (cita siempre el nombre del documento y número de cláusula):""")
 
-Responde de manera concisa, precisa y con referencia exacta al documento fuente.
-""")
+
+def retrieve_context(query: str) -> str:
+    """Retrieve and group context by source document with expanded search."""
+    # Original search
+    docs1 = STORE.similarity_search(query, k=4)
+
+    # Supplementary searches for common ISO document-control topics
+    extra_queries = [
+        "información documentada control cambios",
+    ]
+    docs2 = []
+    for eq in extra_queries:
+        docs2.extend(STORE.similarity_search(eq, k=2))
+
+    # Merge, deduplicate by content, keep max 8 chunks
+    seen = set()
+    all_docs = []
+    for doc in docs1 + docs2:
+        content_hash = hash(doc.page_content[:200])
+        if content_hash not in seen:
+            seen.add(content_hash)
+            all_docs.append(doc)
+    all_docs = all_docs[:8]
+
+    by_source = {}
+    for doc in all_docs:
+        source = doc.metadata.get("source_filename", "documento desconocido")
+        if source not in by_source:
+            by_source[source] = []
+        by_source[source].append(doc.page_content)
+
+    serialized = ""
+    for source, chunks in by_source.items():
+        serialized += f"=== DOCUMENTO: {source} ===\n"
+        for i, chunk in enumerate(chunks, 1):
+            serialized += f"[Fragmento {i}]\n{chunk}\n\n"
+        serialized += f"=== FIN DOCUMENTO: {source} ===\n\n"
+
+    print("Contexto: ", serialized)
+    return serialized
 
 
 # creating the retriever tool
 @tool
 def retrieve(query: str):
     """Retrieve information related to a query. Only when the users intent requires information from the documents."""
-    retrieved_docs = STORE.similarity_search(query, k=6)
-
-    serialized = ""
-
-    for doc in retrieved_docs:
-        serialized += f"Contexto: {doc.page_content}"
-    print("Contexto: ", serialized)
-    return serialized
+    return retrieve_context(query)
 
 
 # combining all tools
@@ -163,7 +185,10 @@ async def index_document(doc_id: str, filename: str | None = Form(None)):
     contents = found.read_bytes()
     text = node_extract(contents, found.name)
     chunks = node_split(text)
-    node_index(chunks, doc_id, found.name)
+
+    names = load_names()
+    original_name = names.get(doc_id, found.name)
+    node_index(chunks, doc_id, original_name)
     return JSONResponse(
         content={"status": "ok", "indexed_chunks": len(chunks)}, status_code=200
     )
@@ -213,27 +238,23 @@ async def delete_document(doc_id: str):
 
 @app.post("/query")
 async def query_chat(request: QueryRequest):
-    # retrieve top-k
+    # Pre-retrieve context grouped by document
+    context = retrieve_context(request.query)
 
-    result = agent.invoke(
-        {
-            "messages": [
-                HumanMessage(
-                    content=prompt.format_messages(
-                        input=request.query,
-                        chat_history="\n".join(
-                            [
-                                f"User: {msg['user']}\nAI: {msg['ai']}"
-                                for msg in CHAT_HISTORY
-                            ]
-                        ),
-                    )[0].content
-                )
-            ]
-        }
+    # Build the full message with context directly
+    formatted = prompt.format_messages(
+        input=request.query,
+        context=context,
     )
-    print(result.get("messages", [])[-1].content)
+    full_message = formatted[0].content
+
+    # Call LLM directly
+    from langchain_core.messages import HumanMessage as HM
+    result = llm.invoke([HM(content=full_message)])
+    answer = result.content
+
+    print(answer)
     return {
-        "answer": result.get("messages", [])[-1].content,
-        "contexts": result.get("messages", [])[-1].response_metadata,
+        "answer": answer,
+        "contexts": result.response_metadata,
     }
