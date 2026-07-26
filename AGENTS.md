@@ -19,7 +19,7 @@ Local RAG (Retrieval-Augmented Generation) app: FastAPI backend + React/Vite fro
 ```bash
 cd backend
 pip install -r requirements.txt
-uvicorn main:app --reload --host 0.0.0.0 --port 8000
+python -m uvicorn main:app --reload --host 0.0.0.0 --port 8000
 ```
 
 ### Frontend
@@ -63,11 +63,13 @@ frontend/
 - **Agent**: LangChain agent with a single `retrieve` tool (similarity search, k=3)
 - **API base**: `http://localhost:8000`
 - **CORS**: Allows all origins (dev mode)
+- **Chat history**: In-memory `CHAT_HISTORY` list, persisted during server runtime
 
 ### Frontend
 
 - **Entry point**: `frontend/src/main.jsx`
 - **No React Router** — page switching via `useState("docs"|"chat")`
+- **Chat persistence**: Messages state lives in `App.jsx`, persists across page switches
 - **API client**: `frontend/src/api.js` — Axios with `VITE_API_URL` or `http://localhost:8000`
 - **Styling**: Tailwind CSS 4 via Vite plugin
 - **Build**: Vite + SWC (`@vitejs/plugin-react-swc`)
@@ -85,15 +87,17 @@ frontend/
 ### API Endpoints
 
 - `POST /upload` — Upload file, returns `doc_id`
-- `POST /index/{doc_id}` — Extract text, split, index into ChromaDB
+- `POST /index/{doc_id}` — Extract text, split, index into ChromaDB (supports re-indexing)
 - `GET /documents` — List all uploaded files
+- `GET /documents/{doc_id}/indexed` — Check if document is indexed, returns chunk count
 - `DELETE /documents/{doc_id}` — Delete from ChromaDB + disk
 - `POST /query` — Send question, agent retrieves context and answers
 
 ### Gotchas
 
-- `requirements.txt` is incomplete — missing `langchain-ollama`, `langchain-chroma`, `langchain-text-splitters`, `langchain-core`, `python-dotenv`
-- `CHAT_HISTORY` in `main.py` is never appended to after queries (in-memory only, currently broken)
 - `node_retrieve()` in `langgraph_nodes.py` exists but is unused — the agent tool does its own retrieval
 - No `__init__.py` in `backend/src/` — works but unconventional
 - `settings.py` and `main.py` have different LLM_MODEL defaults — env var overrides both
+- `requirements.txt` is complete — all langchain packages included
+- Chat history is in-memory only — resets when server restarts
+- Document delete uses stem matching — finds file by UUID without extension

@@ -4,7 +4,13 @@ from fastapi import FastAPI, UploadFile, File, Form, HTTPException, BackgroundTa
 from fastapi.responses import JSONResponse
 from fastapi.middleware.cors import CORSMiddleware
 from pathlib import Path
-from src.langgraph_nodes import node_extract, node_split, node_index, node_retrieve, STORE
+from src.langgraph_nodes import (
+    node_extract,
+    node_split,
+    node_index,
+    node_retrieve,
+    STORE,
+)
 from src.settings import DATA_DIR, TOP_K
 from langchain_ollama import OllamaEmbeddings
 from langchain_core.prompts import PromptTemplate
@@ -17,20 +23,24 @@ from langchain_core.tools import tool
 from langchain_core.messages import AIMessage, HumanMessage
 from pydantic import BaseModel
 
+
 class QueryRequest(BaseModel):
     query: str
+
 
 load_dotenv()
 
 CHAT_HISTORY = []
 
 app = FastAPI()
-app.add_middleware(CORSMiddleware, allow_origins=["*"], allow_methods=["*"], allow_headers=["*"])
+app.add_middleware(
+    CORSMiddleware, allow_origins=["*"], allow_methods=["*"], allow_headers=["*"]
+)
 
 DOCS_DIR = Path(DATA_DIR) / "uploads"
 DOCS_DIR.mkdir(parents=True, exist_ok=True)
 
-llm  = init_chat_model(
+llm = init_chat_model(
     os.getenv("LLM_MODEL", "llama3.2:latest"),
     model_provider="ollama",
     temperature=0.0,
@@ -48,7 +58,7 @@ ollama_emb = OllamaEmbeddings(
 STORE = Chroma(
     collection_name="data_rag",
     embedding_function=ollama_emb,
-    persist_directory='chroma_db', 
+    persist_directory="chroma_db",
 )
 
 # Basic prompt
@@ -62,8 +72,10 @@ El historial de chat es el siguiente:
 {chat_history}
 
 Responde de manera concisa y precisa. Si no sabes la respuesta, di que no lo sabes. Responde solo con la respuesta para el usuario.
-
+Es obligatorio que en tu respuesta identifiques e incluyas explícitamente los números de los capítulos, cláusulas y requisitos específicos extraídos de los documentos que fundamentan tu respuesta.
 """)
+
+
 # creating the retriever tool
 @tool
 def retrieve(query: str):
@@ -74,8 +86,9 @@ def retrieve(query: str):
 
     for doc in retrieved_docs:
         serialized += f"Contexto: {doc.page_content}"
-    print('Contexto: ', serialized)
+    print("Contexto: ", serialized)
     return serialized
+
 
 # combining all tools
 tools = [retrieve]
@@ -96,6 +109,7 @@ async def upload(file: UploadFile = File(...), title: str | None = Form(None)):
         f.write(contents)
     return {"status": "ok", "doc_id": doc_id, "filename": file.filename}
 
+
 @app.post("/index/{doc_id}")
 async def index_document(doc_id: str, filename: str | None = Form(None)):
     # find file by doc_id
@@ -106,7 +120,7 @@ async def index_document(doc_id: str, filename: str | None = Form(None)):
             break
     if not found:
         raise HTTPException(status_code=404, detail="Document not found")
-    
+
     # Delete existing chunks if document is already indexed (re-indexing)
     try:
         existing = STORE.get(where={"doc_id": doc_id})
@@ -114,28 +128,36 @@ async def index_document(doc_id: str, filename: str | None = Form(None)):
             STORE.delete(ids=existing["ids"])
     except:
         pass
-    
+
     contents = found.read_bytes()
     text = node_extract(contents, found.name)
     chunks = node_split(text)
     node_index(chunks, doc_id, found.name)
-    return JSONResponse(content={"status": "ok", "indexed_chunks": len(chunks)}, status_code=200)
+    return JSONResponse(
+        content={"status": "ok", "indexed_chunks": len(chunks)}, status_code=200
+    )
+
 
 @app.get("/documents")
 def list_documents():
-    docs_map = os.listdir('data/uploads')
+    docs_map = os.listdir("data/uploads")
     out = []
     for doc_id in docs_map:
-        out.append({"filename": doc_id, 'type': Path(doc_id).suffix})
+        out.append({"filename": doc_id, "type": Path(doc_id).suffix})
     return out
+
 
 @app.get("/documents/{doc_id}/indexed")
 async def check_indexed(doc_id: str):
     try:
         results = STORE.get(where={"doc_id": doc_id})
-        return {"indexed": len(results.get("ids", [])) > 0, "chunks": len(results.get("ids", []))}
+        return {
+            "indexed": len(results.get("ids", [])) > 0,
+            "chunks": len(results.get("ids", [])),
+        }
     except:
         return {"indexed": False, "chunks": 0}
+
 
 @app.delete("/documents/{doc_id}")
 async def delete_document(doc_id: str):
@@ -147,12 +169,30 @@ async def delete_document(doc_id: str):
             break
     return {"status": "ok", "deleted_chunks": deleted}
 
+
 @app.post("/query")
 async def query_chat(request: QueryRequest):
     # retrieve top-k
 
-    result = agent.invoke({"messages": [
-        HumanMessage(content=prompt.format_messages(input=request.query, chat_history="\n".join([f"User: {msg['user']}\nAI: {msg['ai']}" for msg in CHAT_HISTORY]))[0].content)
-    ]})
-    print( result.get("messages",[])[-1].content)
-    return {"answer": result.get("messages",[])[-1].content, "contexts": result.get("messages",[])[-1].response_metadata}
+    result = agent.invoke(
+        {
+            "messages": [
+                HumanMessage(
+                    content=prompt.format_messages(
+                        input=request.query,
+                        chat_history="\n".join(
+                            [
+                                f"User: {msg['user']}\nAI: {msg['ai']}"
+                                for msg in CHAT_HISTORY
+                            ]
+                        ),
+                    )[0].content
+                )
+            ]
+        }
+    )
+    print(result.get("messages", [])[-1].content)
+    return {
+        "answer": result.get("messages", [])[-1].content,
+        "contexts": result.get("messages", [])[-1].response_metadata,
+    }
