@@ -1,7 +1,7 @@
 import os
 import uuid
 import json
-from fastapi import FastAPI, UploadFile, File, Form, HTTPException, BackgroundTasks
+from fastapi import FastAPI, UploadFile, File, Form, HTTPException
 from fastapi.responses import JSONResponse
 from fastapi.middleware.cors import CORSMiddleware
 from pathlib import Path
@@ -9,22 +9,18 @@ from src.langgraph_nodes import (
     node_extract,
     node_split,
     node_index,
-    node_retrieve,
     STORE,
 )
-from src.settings import DATA_DIR, TOP_K, LLM_MODEL
+from src.settings import DATA_DIR, LLM_MODEL
 from langchain_ollama import OllamaEmbeddings
-from langchain_core.prompts import PromptTemplate
+from langchain_core.prompts import ChatPromptTemplate
 from langchain.chat_models import init_chat_model
 from langchain_chroma import Chroma
 from dotenv import load_dotenv
-from langchain.agents import create_agent
-from langchain_core.prompts import PromptTemplate, ChatPromptTemplate
-from langchain_core.tools import tool
-from langchain_core.messages import AIMessage, HumanMessage
 from pydantic import BaseModel
 
 # Nuestros auditores internos acaban de detectar que el departamento de producción está utilizando planos de fabricación de una versión del año pasado porque nadie les notificó que los diseños habían cambiado. Además, no existe ningún registro que demuestre quién aprobó la última versión de esos planos. Técnicamente, ¿qué requisitos específicos de nuestro sistema de gestión estamos incumpliendo según la norma? Dime el nombre de la norma ISO tambien
+
 
 class QueryRequest(BaseModel):
     query: str
@@ -45,15 +41,18 @@ DOCS_DIR.mkdir(parents=True, exist_ok=True)
 # Filename mapping file
 NAMES_FILE = DOCS_DIR / "filenames.json"
 
+
 def load_names() -> dict:
     if NAMES_FILE.exists():
         with open(NAMES_FILE, "r", encoding="utf-8") as f:
             return json.load(f)
     return {}
 
+
 def save_names(names: dict):
     with open(NAMES_FILE, "w", encoding="utf-8") as f:
         json.dump(names, f, ensure_ascii=False)
+
 
 llm = init_chat_model(
     LLM_MODEL,
@@ -77,7 +76,8 @@ STORE = Chroma(
 )
 
 # Basic prompt
-prompt = ChatPromptTemplate.from_template("""Eres un experto en normas ISO. Responde SOLO usando el contexto proporcionado.
+prompt = ChatPromptTemplate.from_template(
+    """Eres un experto en normas ISO. Responde SOLO usando el contexto proporcionado.
 
 Si el contexto no contiene la respuesta, di: "No tengo información en los documentos."
 
@@ -86,7 +86,8 @@ CONTEXTO:
 
 PREGUNTA: {input}
 
-RESPUESTA: Cita siempre el nombre del documento y el número de cláusula. No menciones "Fragmento X", cita directamente el texto relevante del contexto.""")
+RESPUESTA: Cita siempre el nombre del documento y el número de cláusula. No menciones "Fragmento X", cita directamente el texto relevante del contexto."""
+)
 
 
 def retrieve_context(query: str) -> str:
@@ -130,22 +131,6 @@ def retrieve_context(query: str) -> str:
     return serialized
 
 
-# creating the retriever tool
-@tool
-def retrieve(query: str):
-    """Retrieve information related to a query. Only when the users intent requires information from the documents."""
-    return retrieve_context(query)
-
-
-# combining all tools
-tools = [retrieve]
-
-# initiating the agent
-agent = create_agent(model=llm, tools=tools)
-
-chain = prompt | agent
-
-
 @app.post("/upload")
 async def upload(file: UploadFile = File(...), title: str | None = Form(None)):
     contents = await file.read()
@@ -154,12 +139,12 @@ async def upload(file: UploadFile = File(...), title: str | None = Form(None)):
     save_path = DOCS_DIR / f"{doc_id}{ext}"
     with open(save_path, "wb") as f:
         f.write(contents)
-    
+
     # Save original filename mapping
     names = load_names()
     names[doc_id] = file.filename
     save_names(names)
-    
+
     return {"status": "ok", "doc_id": doc_id, "filename": file.filename}
 
 
@@ -202,7 +187,9 @@ def list_documents():
     for doc_id in docs_map:
         stem = Path(doc_id).stem
         original_name = names.get(stem, doc_id)
-        out.append({"doc_id": stem, "filename": original_name, "type": Path(doc_id).suffix})
+        out.append(
+            {"doc_id": stem, "filename": original_name, "type": Path(doc_id).suffix}
+        )
     return out
 
 
@@ -226,13 +213,13 @@ async def delete_document(doc_id: str):
         if p.stem == doc_id:
             os.remove(p)
             break
-    
+
     # Remove filename mapping
     names = load_names()
     if doc_id in names:
         del names[doc_id]
         save_names(names)
-    
+
     return {"status": "ok", "deleted_chunks": deleted}
 
 
@@ -250,6 +237,7 @@ async def query_chat(request: QueryRequest):
 
     # Call LLM directly
     from langchain_core.messages import HumanMessage as HM
+
     result = llm.invoke([HM(content=full_message)])
     answer = result.content
 

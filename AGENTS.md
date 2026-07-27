@@ -35,7 +35,7 @@ npm run dev
 
 ```
 backend/
-├── main.py                  # FastAPI app, LangChain agent, API endpoints
+├── main.py                  # FastAPI app, direct LLM call, API endpoints
 ├── src/
 │   ├── settings.py          # Env vars and config constants
 │   ├── extractor.py         # PDF/DOCX/TXT text extraction
@@ -49,7 +49,7 @@ frontend/
 │   ├── Lateralbar.jsx       # Sidebar navigation with active state
 │   └── pages/
 │       ├── Documents.jsx    # Upload, list, delete, re-index docs
-│       └── Chat.jsx         # Chat interface with RAG agent
+│       └── Chat.jsx         # Chat interface with message history
 ```
 
 ## Key Facts for Agents
@@ -60,13 +60,15 @@ frontend/
 - **LLM**: Ollama via `langchain_ollama`, default `llama3.1:8b` (env: `LLM_MODEL`)
 - **Embeddings**: `mxbai-embed-large` (env: `EMBED_MODEL`)
 - **Vector store**: ChromaDB persisted to `backend/chroma_db/`
-- **Agent**: Direct LLM call (no agent framework) with pre-retrieved context grouped by document
-- **Prompt**: Simple, direct prompt for ISO expert role with context + question format
-- **Source attribution**: Chunks include `source_filename` metadata (original filename from `filenames.json`); context is grouped by document with `=== DOCUMENTO: filename ===` headers so the LLM knows which document each chunk comes from
+- **LLM call**: Direct `llm.invoke()` — no agent framework in the query path. `create_agent` is imported but unused (dead code).
+- **Retrieval**: `retrieve_context()` does primary search (k=4) + supplementary search for "información documentada control cambios" (k=2), deduplicates by `hash(content[:200])`, caps at 8 chunks max. Context grouped by `=== DOCUMENTO: filename ===` headers.
+- **Prompt**: Minimal ISO expert prompt — `ChatPromptTemplate` with context + question, explicit instruction to cite document name and clause number, not fragment markers
+- **Source attribution**: Chunks include `source_filename` metadata (original filename from `filenames.json`)
 - **API base**: `http://localhost:8000`
 - **CORS**: Allows all origins (dev mode)
 - **Chat history**: In-memory `CHAT_HISTORY` list, persisted during server runtime
 - **Filename mapping**: `data/uploads/filenames.json` maps UUID → original filename
+- **PDF extraction**: `_is_toc_page()` skips table-of-contents/index pages (detects lines ending with `... page_number`)
 
 ### Frontend
 
@@ -94,7 +96,7 @@ frontend/
 - `GET /documents` — List all uploaded files with original filenames
 - `GET /documents/{doc_id}/indexed` — Check if document is indexed, returns chunk count
 - `DELETE /documents/{doc_id}` — Delete from ChromaDB, disk, and filename mapping
-- `POST /query` — Send question, agent retrieves context and answers
+- `POST /query` — Send question, pre-retrieves context and calls LLM directly
 
 ### Gotchas
 
