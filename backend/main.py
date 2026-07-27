@@ -89,9 +89,10 @@ PREGUNTA: {input}
 REGLAS DE RESPUESTA:
 1. Cita siempre el nombre exacto del documento (ej: ISO 9001:2015) y la cláusula/subcláusula específica (ej: 7.5.3.1 a), no solo el número de cláusula general.
 2. Distingue entre aspectos diferentes de una misma cláusula: disponibilidad vs protección vs control de cambios vs conservación de registros.
-3. Si el problema involucra planos obsoletos, busca cláusulas sobre: disponibilidad e idoneidad de información documentada, control de cambios/distribución, y conservación de registros de aprobación.
-4. No inventes cláusulas que no estén en el contexto. Si no encuentras la subcláusula exacta, indica cuál es la más cercana disponible.
-5. Responde de forma concisa: norma + cláusula + por qué aplica al caso."""
+3. En ISO 9001:2015, la información documentada se divide en: 7.5.3.1 (disponibilidad e idoneidad — que la info esté disponible y sea adecuada donde y cuando se necesite) y 7.5.3.2 (control de cambios, distribución, conservación de registros — que se actualice, distribuya y mantenga evidencia). No mezcles ambas subcláusulas.
+4. Si el problema involucra planos obsoletos, busca cláusulas sobre: disponibilidad e idoneidad de información documentada, control de cambios/distribución, y conservación de registros de aprobación.
+5. No inventes cláusulas que no estén en el contexto. Si no encuentras la subcláusula exacta, indica cuál es la más cercana disponible.
+6. Responde de forma concisa: norma + cláusula + por qué aplica al caso."""
 )
 
 
