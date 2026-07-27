@@ -77,33 +77,40 @@ STORE = Chroma(
 
 # Basic prompt
 prompt = ChatPromptTemplate.from_template(
-    """Eres un experto en normas ISO. Responde SOLO usando el contexto proporcionado.
+    """Eres un experto auditor en normas ISO. Responde SOLO usando el contexto proporcionado.
 
-Si el contexto no contiene la respuesta, di: "No tengo información en los documentos."
+Si el contexto no contiene la información suficiente, di: "No tengo información en los documentos para responder con precisión."
 
 CONTEXTO:
 {context}
 
 PREGUNTA: {input}
 
-RESPUESTA: Cita siempre el nombre del documento y el número de cláusula. No menciones "Fragmento X", cita directamente el texto relevante del contexto."""
+REGLAS DE RESPUESTA:
+1. Cita siempre el nombre exacto del documento (ej: ISO 9001:2015) y la cláusula/subcláusula específica (ej: 7.5.3.1 a), no solo el número de cláusula general.
+2. Distingue entre aspectos diferentes de una misma cláusula: disponibilidad vs protección vs control de cambios vs conservación de registros.
+3. Si el problema involucra planos obsoletos, busca cláusulas sobre: disponibilidad e idoneidad de información documentada, control de cambios/distribución, y conservación de registros de aprobación.
+4. No inventes cláusulas que no estén en el contexto. Si no encuentras la subcláusula exacta, indica cuál es la más cercana disponible.
+5. Responde de forma concisa: norma + cláusula + por qué aplica al caso."""
 )
 
 
 def retrieve_context(query: str) -> str:
     """Retrieve and group context by source document with expanded search."""
     # Original search
-    docs1 = STORE.similarity_search(query, k=4)
+    docs1 = STORE.similarity_search(query, k=6)
 
     # Supplementary searches for common ISO document-control topics
     extra_queries = [
-        "información documentada control cambios",
+        "información documentada control cambios versiones",
+        "disponibilidad idoneidad información documentada",
+        "aprobación registros conservación",
     ]
     docs2 = []
     for eq in extra_queries:
-        docs2.extend(STORE.similarity_search(eq, k=2))
+        docs2.extend(STORE.similarity_search(eq, k=3))
 
-    # Merge, deduplicate by content, keep max 8 chunks
+    # Merge, deduplicate by content, keep max 12 chunks
     seen = set()
     all_docs = []
     for doc in docs1 + docs2:
@@ -111,7 +118,7 @@ def retrieve_context(query: str) -> str:
         if content_hash not in seen:
             seen.add(content_hash)
             all_docs.append(doc)
-    all_docs = all_docs[:8]
+    all_docs = all_docs[:12]
 
     by_source = {}
     for doc in all_docs:
