@@ -86,7 +86,7 @@ CONTEXTO:
 
 PREGUNTA: {input}
 
-RESPUESTA (cita siempre el nombre del documento y número de cláusula):""")
+RESPUESTA: Cita siempre el nombre del documento y el número de cláusula. No menciones "Fragmento X", cita directamente el texto relevante del contexto.""")
 
 
 def retrieve_context(query: str) -> str:
@@ -122,8 +122,8 @@ def retrieve_context(query: str) -> str:
     serialized = ""
     for source, chunks in by_source.items():
         serialized += f"=== DOCUMENTO: {source} ===\n"
-        for i, chunk in enumerate(chunks, 1):
-            serialized += f"[Fragmento {i}]\n{chunk}\n\n"
+        for chunk in chunks:
+            serialized += f"{chunk}\n\n"
         serialized += f"=== FIN DOCUMENTO: {source} ===\n\n"
 
     print("Contexto: ", serialized)
