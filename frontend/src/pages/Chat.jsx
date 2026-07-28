@@ -4,11 +4,12 @@ import { FaArrowRight, FaTrash } from "react-icons/fa";
 
 export default function Chat({ messages, setMessages, clearMessages }){
   const [query, setQuery] = useState("");
+  const [isLoading, setIsLoading] = useState(false);
   const messagesEndRef = useRef(null);
 
   useEffect(() => {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
-  }, [messages]);
+  }, [messages, isLoading]);
 
   const suggestedQuestions = [
     "¿Qué información contienen los documentos?",
@@ -25,6 +26,7 @@ export default function Chat({ messages, setMessages, clearMessages }){
     const userMsg = {role: "user", text: query};
     setMessages(m => [...m, userMsg]);
     setQuery("");
+    setIsLoading(true);
     try {
       console.log("Querying:", query);
       const res = await queryChat(query);
@@ -33,6 +35,8 @@ export default function Chat({ messages, setMessages, clearMessages }){
     } catch (e) {
       console.error(e);
       setMessages(m => [...m, {role: "assistant", text: "Error en la consulta"}]);
+    } finally {
+      setIsLoading(false);
     }
   }
 
@@ -86,6 +90,18 @@ export default function Chat({ messages, setMessages, clearMessages }){
               </div>
             </div>
           ))
+        )}
+        {isLoading && (
+          <div className="flex w-full justify-start">
+            <div className="max-w-[70%] p-3 rounded-lg shadow-sm bg-white text-gray-800 rounded-bl-none border border-gray-200 ml-8">
+              <div className="text-xs font-semibold mb-1 opacity-75">Asistente</div>
+              <div className="flex items-center gap-1 py-1">
+                <span className="w-2 h-2 bg-gray-400 rounded-full animate-bounce" style={{animationDelay: '0ms'}}></span>
+                <span className="w-2 h-2 bg-gray-400 rounded-full animate-bounce" style={{animationDelay: '150ms'}}></span>
+                <span className="w-2 h-2 bg-gray-400 rounded-full animate-bounce" style={{animationDelay: '300ms'}}></span>
+              </div>
+            </div>
+          </div>
         )}
         <div ref={messagesEndRef} />
       </div>
