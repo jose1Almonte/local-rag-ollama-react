@@ -60,10 +60,11 @@ frontend/
 - **LLM**: Ollama via `langchain_ollama`, default `llama3.1:8b` (env: `LLM_MODEL`)
 - **Embeddings**: `mxbai-embed-large` (env: `EMBED_MODEL`)
 - **Vector store**: ChromaDB persisted to `backend/chroma_db/`
-- **LLM call**: Direct `llm.invoke()` — no agent framework in the query path. `create_agent` is imported but unused (dead code).
-- **Retrieval**: `retrieve_context()` does primary search (k=4) + supplementary search for "información documentada control cambios" (k=2), deduplicates by `hash(content[:200])`, caps at 8 chunks max. Context grouped by `=== DOCUMENTO: filename ===` headers.
-- **Prompt**: Minimal ISO expert prompt — `ChatPromptTemplate` with context + question, explicit instruction to cite document name and clause number, not fragment markers
+- **LLM call**: Direct `llm.invoke()` — no agent framework in the query path. `create_agent` was removed.
+- **Retrieval**: `retrieve_context()` does primary search (k=6) + 3 supplementary searches (k=3 each) for ISO document-control topics, deduplicates by `hash(content[:200])`, caps at 12 chunks max. Context grouped by `=== DOCUMENTO: filename ===` headers.
+- **Prompt**: 6-rule ISO auditor prompt — cites specific sub-clauses (e.g. 7.5.3.1 a), distinguishes availability vs protection vs change control vs record retention, warns against mixing 7.5.3.1 and 7.5.3.2
 - **Source attribution**: Chunks include `source_filename` metadata (original filename from `filenames.json`)
+- **Upload**: Accepts multiple files in a single request (`List[UploadFile]`)
 - **API base**: `http://localhost:8000`
 - **CORS**: Allows all origins (dev mode)
 - **Chat history**: In-memory `CHAT_HISTORY` list, persisted during server runtime
@@ -75,7 +76,10 @@ frontend/
 - **Entry point**: `frontend/src/main.jsx`
 - **No React Router** — page switching via `useState("docs"|"chat")`
 - **Chat persistence**: Messages state lives in `App.jsx`, persists across page switches
-- **API client**: `frontend/src/api.js` — Axios with `VITE_API_URL` or `http://localhost:8000`
+- **Multi-file upload**: `<input multiple>`, files shown as removable list, batch upload with progress
+- **Auto-scroll**: Chat scrolls to bottom on new messages (useRef + useEffect)
+- **Typing indicator**: Animated dots while waiting for LLM response (isLoading state)
+- **API client**: `frontend/src/api.js` — Axios with `VITE_API_URL` or `http://localhost:8000`, 300s timeout
 - **Styling**: Tailwind CSS 4 via Vite plugin
 - **Build**: Vite + SWC (`@vitejs/plugin-react-swc`)
 
@@ -87,11 +91,14 @@ frontend/
 | `EMBED_MODEL` | `mxbai-embed-large` | both |
 | `OLLAMA_URL` | `http://localhost:11434` | `settings.py` |
 | `DATA_DIR` | `./data` | `settings.py` |
+| `CHUNK_SIZE` | `500` | `settings.py` |
+| `CHUNK_OVERLAP` | `100` | `settings.py` |
+| `TOP_K` | `10` | `settings.py` |
 | `VITE_API_URL` | `http://localhost:8000` | `api.js` |
 
 ### API Endpoints
 
-- `POST /upload` — Upload file, returns `doc_id` and saves original filename mapping
+- `POST /upload` — Upload multiple files, returns list of `{doc_id, filename}`
 - `POST /index/{doc_id}` — Extract text, split, index into ChromaDB (supports re-indexing)
 - `GET /documents` — List all uploaded files with original filenames
 - `GET /documents/{doc_id}/indexed` — Check if document is indexed, returns chunk count
@@ -100,10 +107,12 @@ frontend/
 
 ### Gotchas
 
-- `node_retrieve()` in `langgraph_nodes.py` exists but is unused — the agent tool does its own retrieval
+- `node_retrieve()` in `langgraph_nodes.py` exists but is unused — `main.py` calls `STORE.similarity_search()` directly
 - No `__init__.py` in `backend/src/` — works but unconventional
 - `settings.py` and `main.py` use consistent defaults — `main.py` imports `LLM_MODEL` from `settings.py`
 - `requirements.txt` is complete — all langchain packages included
 - Chat history is in-memory only — resets when server restarts
 - Document delete uses stem matching — finds file by UUID without extension
 - `filenames.json` stores UUID → original filename mapping — must be kept in sync with uploads
+- Changing `CHUNK_SIZE` in `settings.py` requires re-indexing all documents from the UI
+- Backend run command must use `python -m uvicorn` (not just `uvicorn`) — required on Windows
