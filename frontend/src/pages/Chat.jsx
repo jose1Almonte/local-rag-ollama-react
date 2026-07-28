@@ -1,9 +1,14 @@
-import React, { useState } from "react";
+import React, { useState, useRef, useEffect } from "react";
 import { queryChat } from "../api";
 import { FaArrowRight, FaTrash } from "react-icons/fa";
 
 export default function Chat({ messages, setMessages, clearMessages }){
   const [query, setQuery] = useState("");
+  const messagesEndRef = useRef(null);
+
+  useEffect(() => {
+    messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
+  }, [messages]);
 
   const suggestedQuestions = [
     "¿Qué información contienen los documentos?",
@@ -82,6 +87,7 @@ export default function Chat({ messages, setMessages, clearMessages }){
             </div>
           ))
         )}
+        <div ref={messagesEndRef} />
       </div>
 
       <div className="p-4 bg-white rounded-lg">
