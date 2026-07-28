@@ -2,6 +2,7 @@ import os
 import uuid
 import json
 from fastapi import FastAPI, UploadFile, File, Form, HTTPException
+from typing import List
 from fastapi.responses import JSONResponse
 from fastapi.middleware.cors import CORSMiddleware
 from pathlib import Path
@@ -140,20 +141,24 @@ def retrieve_context(query: str) -> str:
 
 
 @app.post("/upload")
-async def upload(file: UploadFile = File(...), title: str | None = Form(None)):
-    contents = await file.read()
-    ext = Path(file.filename).suffix
-    doc_id = str(uuid.uuid4())
-    save_path = DOCS_DIR / f"{doc_id}{ext}"
-    with open(save_path, "wb") as f:
-        f.write(contents)
+async def upload(files: List[UploadFile] = File(...)):
+    results = []
+    for file in files:
+        contents = await file.read()
+        ext = Path(file.filename).suffix
+        doc_id = str(uuid.uuid4())
+        save_path = DOCS_DIR / f"{doc_id}{ext}"
+        with open(save_path, "wb") as f:
+            f.write(contents)
 
-    # Save original filename mapping
-    names = load_names()
-    names[doc_id] = file.filename
-    save_names(names)
+        # Save original filename mapping
+        names = load_names()
+        names[doc_id] = file.filename
+        save_names(names)
 
-    return {"status": "ok", "doc_id": doc_id, "filename": file.filename}
+        results.append({"doc_id": doc_id, "filename": file.filename})
+
+    return {"status": "ok", "uploaded": results}
 
 
 @app.post("/index/{doc_id}")

@@ -1,11 +1,12 @@
 import React, { useEffect, useState } from "react";
-import { uploadDocument, listDocuments, indexDocument, deleteDocument, checkIndexed } from "../api";
+import { uploadDocuments, listDocuments, indexDocument, deleteDocument, checkIndexed } from "../api";
 import { FaFilePdf, FaFileWord, FaFileExcel, FaFileAlt, FaFile, FaTrash } from 'react-icons/fa';
 
 export default function Documents(){
-  const [file, setFile] = useState(null);
+  const [files, setFiles] = useState([]);
   const [docs, setDocs] = useState([]);
   const [loading, setLoading] = useState(false);
+  const [uploadProgress, setUploadProgress] = useState("");
   const [indexedStatus, setIndexedStatus] = useState({});
 
   useEffect(()=> { refresh(); }, []);
@@ -38,21 +39,27 @@ export default function Documents(){
   };
 
   const handleUpload = async () => {
-    if (!file) return alert("Selecciona un archivo");
+    if (!files.length) return alert("Selecciona al menos un archivo");
     setLoading(true);
+    setUploadProgress(`Subiendo 0 de ${files.length}...`);
     try {
-      const res = await uploadDocument(file);
-      const doc_id = res.data.doc_id;
-      // index automatically
-      await indexDocument(doc_id, 'name');
+      const res = await uploadDocuments(files);
+      const uploaded = res.data.uploaded || [];
+      setUploadProgress(`Indexando 0 de ${uploaded.length}...`);
+      for (let i = 0; i < uploaded.length; i++) {
+        setUploadProgress(`Indexando ${i + 1} de ${uploaded.length}...`);
+        await indexDocument(uploaded[i].doc_id, 'name');
+      }
       await refresh();
-      setFile(null);
-      alert("Subido e indexado");
+      setFiles([]);
+      setUploadProgress("");
+      alert(`${uploaded.length} archivo(s) subido(s) e indexado(s)`);
     } catch (e) {
       console.error(e);
       alert("Error al subir");
     } finally {
       setLoading(false);
+      setUploadProgress("");
     }
   };
 
@@ -76,6 +83,15 @@ export default function Documents(){
     await deleteDocument(doc_id);
     refresh();
   }
+  const addFiles = (newFiles) => {
+    const fileArray = Array.from(newFiles);
+    setFiles(prev => [...prev, ...fileArray]);
+  };
+
+  const removeFile = (index) => {
+    setFiles(prev => prev.filter((_, i) => i !== index));
+  };
+
   const getFileType = (filename) => {
     const ext = filename?.split('.').pop()?.toLowerCase();
     return ext || 'unknown';
@@ -106,8 +122,8 @@ export default function Documents(){
       <div>
         <article className="w-full flex justify-between mb-4 ">
           <h3 className="font-light text-2xl">Documentos</h3>
-          <button onClick={handleUpload} disabled={loading || !file} className="bg-blue-200 text-blue-900 hover:border border-blue-900 transition transform px-6 py-2 rounded-xl disabled:bg-gray-400 disabled:cursor-not-allowed cursor-pointer">
-            Subir e indexar
+          <button onClick={handleUpload} disabled={loading || !files.length} className="bg-blue-200 text-blue-900 hover:border border-blue-900 transition transform px-6 py-2 rounded-xl disabled:bg-gray-400 disabled:cursor-not-allowed cursor-pointer">
+            {loading ? uploadProgress : `Subir e indexar (${files.length})`}
           </button>
         </article>
         <div 
@@ -119,15 +135,15 @@ export default function Documents(){
         onDrop={(e) => {
           e.preventDefault();
           e.stopPropagation();
-          const droppedFile = e.dataTransfer.files[0];
-          if (droppedFile) setFile(droppedFile);
+          addFiles(e.dataTransfer.files);
         }}
         onClick={() => document.getElementById('fileInput').click()}
       >
         <input 
           id="fileInput"
           type="file" 
-          onChange={(e)=> setFile(e.target.files[0])} 
+          multiple
+          onChange={(e)=> addFiles(e.target.files)} 
           className="hidden"
         />
         <div className="text-blue-600 mb-2">
@@ -136,9 +152,19 @@ export default function Documents(){
           </svg>
         </div>
         <p className="text-sm text-gray-600">
-          {file ? file.name : 'Arrastra un archivo aquí o haz clic para seleccionar'}
+          {files.length > 0 ? `${files.length} archivo(s) seleccionado(s)` : 'Arrastra archivos aquí o haz clic para seleccionar (múltiple)'}
         </p>
       </div>
+      {files.length > 0 && (
+        <div className="mb-4 space-y-1">
+          {files.map((f, i) => (
+            <div key={i} className="flex items-center justify-between bg-gray-50 rounded px-3 py-1 text-sm">
+              <span className="truncate">{f.name}</span>
+              <button onClick={() => removeFile(i)} className="text-red-500 hover:text-red-700 ml-2 cursor-pointer">✕</button>
+            </div>
+          ))}
+        </div>
+      )}
       <h2 className="text-md font-medium mb-4">Todos los archivos</h2>
       <div className="border border-gray-100 rounded-lg">
         {docs.map(d => {
