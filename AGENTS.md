@@ -1,118 +1,70 @@
 # AGENTS.md
 
-## Project Overview
-
-Local RAG (Retrieval-Augmented Generation) app: FastAPI backend + React/Vite frontend. Upload documents (PDF, DOCX, TXT), index into ChromaDB, chat with Ollama-hosted LLMs that retrieve context from your docs. UI is in Spanish.
-
-## Quick Start
-
-### Prerequisites
-
-- Ollama running locally with models pulled:
-  ```bash
-  ollama pull llama3.1:8b
-  ollama pull mxbai-embed-large
-  ```
-
-### Backend
+## Commands
 
 ```bash
+# Backend (must use python -m on Windows)
 cd backend
 pip install -r requirements.txt
 python -m uvicorn main:app --reload --host 0.0.0.0 --port 8000
-```
 
-### Frontend
-
-```bash
+# Frontend
 cd frontend
 npm install
-npm run dev
-# Runs on http://localhost:5173
+npm run dev    # http://localhost:5173
+
+# Required Ollama models
+ollama pull llama3.1:8b
+ollama pull mxbai-embed-large
 ```
 
 ## Architecture
 
-```
-backend/
-├── main.py                  # FastAPI app, direct LLM call, API endpoints
-├── src/
-│   ├── settings.py          # Env vars and config constants
-│   ├── extractor.py         # PDF/DOCX/TXT text extraction
-│   └── langgraph_nodes.py   # RAG pipeline: extract → split → index → retrieve
-└── data/uploads/            # Uploaded documents (UUID-named) + filenames.json
+- **No React Router** — page switching via `useState("docs"|"chat")` in `App.jsx`
+- **Messages state lives in App.jsx** — persists across page switches (not in Chat.jsx)
+- **Chat history is in-memory** (`CHAT_HISTORY` list in `main.py`) — resets on server restart
+- **No agent framework** — `/query` calls `llm.invoke()` directly with pre-retrieved context
+- **ChromaDB persisted** to `backend/chroma_db/` — changing `CHUNK_SIZE`/`EMBED_MODEL` requires re-indexing from UI
 
-frontend/
-├── src/
-│   ├── api.js               # Axios client → backend API
-│   ├── App.jsx              # Page routing (useState, no router), messages state
-│   ├── Lateralbar.jsx       # Sidebar navigation with active state
-│   └── pages/
-│       ├── Documents.jsx    # Upload, list, delete, re-index docs
-│       └── Chat.jsx         # Chat interface with message history
-```
+## Backend Gotchas
 
-## Key Facts for Agents
+| Gotcha | Detail |
+|--------|--------|
+| `node_retrieve()` dead | `main.py` calls `STORE.similarity_search()` directly, not the langgraph node |
+| PDF TOC skipping | `_is_toc_page()` skips index pages (lines ending with `... NNN`) |
+| UUID filenames | Files saved as `data/uploads/{uuid}.{ext}`, mapping stored in `filenames.json` |
+| Multi-file upload | `POST /upload` accepts `List[UploadFile]`, returns `{uploaded: [{doc_id, filename}]}` |
+| Retrieval | Primary k=6 + 3 supplementary queries k=3 each, dedup by hash, max 12 chunks |
+| Prompt | 6-rule ISO auditor prompt with explicit 7.5.3.1 vs 7.5.3.2 distinction |
+| Source attribution | Chunks carry `source_filename` metadata from `filenames.json` |
+| No `__init__.py` | `backend/src/` has no `__init__.py` — works but unconventional |
 
-### Backend
+## Frontend Gotchas
 
-- **Entry point**: `backend/main.py`
-- **LLM**: Ollama via `langchain_ollama`, default `llama3.1:8b` (env: `LLM_MODEL`)
-- **Embeddings**: `mxbai-embed-large` (env: `EMBED_MODEL`)
-- **Vector store**: ChromaDB persisted to `backend/chroma_db/`
-- **LLM call**: Direct `llm.invoke()` — no agent framework in the query path. `create_agent` was removed.
-- **Retrieval**: `retrieve_context()` does primary search (k=6) + 3 supplementary searches (k=3 each) for ISO document-control topics, deduplicates by `hash(content[:200])`, caps at 12 chunks max. Context grouped by `=== DOCUMENTO: filename ===` headers.
-- **Prompt**: 6-rule ISO auditor prompt — cites specific sub-clauses (e.g. 7.5.3.1 a), distinguishes availability vs protection vs change control vs record retention, warns against mixing 7.5.3.1 and 7.5.3.2
-- **Source attribution**: Chunks include `source_filename` metadata (original filename from `filenames.json`)
-- **Upload**: Accepts multiple files in a single request (`List[UploadFile]`)
-- **API base**: `http://localhost:8000`
-- **CORS**: Allows all origins (dev mode)
-- **Chat history**: In-memory `CHAT_HISTORY` list, persisted during server runtime
-- **Filename mapping**: `data/uploads/filenames.json` maps UUID → original filename
-- **PDF extraction**: `_is_toc_page()` skips table-of-contents/index pages (detects lines ending with `... page_number`)
+| Gotcha | Detail |
+|--------|--------|
+| Multi-file upload | `<input multiple>` with batch upload and progress |
+| Axios timeout | 300s (was 120s) |
+| Auto-scroll | `useRef` + `useEffect` on `messages` and `isLoading` |
+| Typing indicator | `isLoading` state — 3 animated dots while LLM responds |
 
-### Frontend
+## Env Vars (all with defaults)
 
-- **Entry point**: `frontend/src/main.jsx`
-- **No React Router** — page switching via `useState("docs"|"chat")`
-- **Chat persistence**: Messages state lives in `App.jsx`, persists across page switches
-- **Multi-file upload**: `<input multiple>`, files shown as removable list, batch upload with progress
-- **Auto-scroll**: Chat scrolls to bottom on new messages (useRef + useEffect)
-- **Typing indicator**: Animated dots while waiting for LLM response (isLoading state)
-- **API client**: `frontend/src/api.js` — Axios with `VITE_API_URL` or `http://localhost:8000`, 300s timeout
-- **Styling**: Tailwind CSS 4 via Vite plugin
-- **Build**: Vite + SWC (`@vitejs/plugin-react-swc`)
-
-### Environment Variables
-
-| Var | Default | Where |
-|-----|---------|-------|
-| `LLM_MODEL` | `llama3.1:8b` | `settings.py` (used in `main.py` via constant) |
-| `EMBED_MODEL` | `mxbai-embed-large` | both |
-| `OLLAMA_URL` | `http://localhost:11434` | `settings.py` |
-| `DATA_DIR` | `./data` | `settings.py` |
+| Var | Default | File |
+|-----|---------|------|
+| `LLM_MODEL` | `llama3.1:8b` | `settings.py` |
+| `EMBED_MODEL` | `mxbai-embed-large` | `settings.py` |
 | `CHUNK_SIZE` | `500` | `settings.py` |
-| `CHUNK_OVERLAP` | `100` | `settings.py` |
 | `TOP_K` | `10` | `settings.py` |
 | `VITE_API_URL` | `http://localhost:8000` | `api.js` |
 
-### API Endpoints
+## API Endpoints
 
-- `POST /upload` — Upload multiple files, returns list of `{doc_id, filename}`
-- `POST /index/{doc_id}` — Extract text, split, index into ChromaDB (supports re-indexing)
-- `GET /documents` — List all uploaded files with original filenames
-- `GET /documents/{doc_id}/indexed` — Check if document is indexed, returns chunk count
-- `DELETE /documents/{doc_id}` — Delete from ChromaDB, disk, and filename mapping
-- `POST /query` — Send question, pre-retrieves context and calls LLM directly
-
-### Gotchas
-
-- `node_retrieve()` in `langgraph_nodes.py` exists but is unused — `main.py` calls `STORE.similarity_search()` directly
-- No `__init__.py` in `backend/src/` — works but unconventional
-- `settings.py` and `main.py` use consistent defaults — `main.py` imports `LLM_MODEL` from `settings.py`
-- `requirements.txt` is complete — all langchain packages included
-- Chat history is in-memory only — resets when server restarts
-- Document delete uses stem matching — finds file by UUID without extension
-- `filenames.json` stores UUID → original filename mapping — must be kept in sync with uploads
-- Changing `CHUNK_SIZE` in `settings.py` requires re-indexing all documents from the UI
-- Backend run command must use `python -m uvicorn` (not just `uvicorn`) — required on Windows
+| Method | Path | Description |
+|--------|------|-------------|
+| `POST` | `/upload` | Upload multiple files → `[{doc_id, filename}]` |
+| `POST` | `/index/{doc_id}` | Extract + split + index (re-indexable) |
+| `GET` | `/documents` | List with original filenames |
+| `GET` | `/documents/{doc_id}/indexed` | Check index status + chunk count |
+| `DELETE` | `/documents/{doc_id}` | Deletes from ChromaDB + disk + mapping |
+| `POST` | `/query` | RAG query → direct `llm.invoke()` |
